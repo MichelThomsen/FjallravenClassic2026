@@ -55,6 +55,13 @@
     }
     #cp-header h2 { font-size: 15px; color: #e94560; margin-bottom: 4px; }
     #cp-header p { font-size: 12px; color: #aaa; }
+    #ping-all-btn {
+      width: 100%; margin-top: 12px; padding: 10px;
+      background: #e94560; color: #fff; border: none;
+      border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer;
+      transition: opacity .2s;
+    }
+    #ping-all-btn:disabled { opacity: .4; cursor: default; }
     #cp-live-dot {
       display: inline-block; width: 8px; height: 8px;
       background: #4caf50; border-radius: 50%; margin-right: 6px;
@@ -315,6 +322,7 @@
     <div id="cp-header">
       <h2><span id="cp-live-dot"></span>Live oversigt <span class="cp-session-badge" id="cp-session-label">default</span></h2>
       <p>Opdateres automatisk fra Firebase</p>
+      <button id="ping-all-btn" onclick="requestPositionAll(this)">📍 Anmod om lokation — alle tropper</button>
     </div>
     <div id="cp-table-wrap">
       <table id="cp-table">
@@ -861,6 +869,16 @@
     setTimeout(() => t.remove(), 4000);
   }
 
+  function handlePing() {
+    showToast('📍 Checkpoint anmoder om din position!');
+    if ('vibrate' in navigator) navigator.vibrate([300, 150, 300]);
+    navigator.geolocation.getCurrentPosition(
+      pos => handlePosition(pos),
+      err => console.warn('Ping GPS fejl:', err),
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  }
+
   function requestPosition(uid, name, btn) {
     if (!db) return;
     if (btn) {
@@ -868,28 +886,41 @@
       setTimeout(() => { btn.disabled = false; }, 15000);
     }
     db.ref(`sessions/${SESSION_ID}/pings/${uid}`).set({
-      requestedAt: Date.now(),
-      from: 'Checkpoint'
-    }).then(() => {
-      showToast(`📍 Anmodning sendt til ${name}`);
+      requestedAt: Date.now(), from: 'Checkpoint'
+    }).then(() => showToast(`📍 Anmodning sendt til ${name}`));
+  }
+
+  function requestPositionAll(btn) {
+    if (!db) return;
+    if (btn) {
+      btn.disabled = true;
+      setTimeout(() => { btn.disabled = false; }, 20000);
+    }
+    const ref = db.ref(`sessions/${SESSION_ID}/pings/ALL`);
+    ref.set({ requestedAt: Date.now(), from: 'Checkpoint' }).then(() => {
+      showToast('📍 Anmodning sendt til alle tropper');
+      setTimeout(() => ref.remove(), 60000);
     });
   }
 
   function listenForPings() {
     if (!db || !userId) return;
+
+    // Individuel ping — kun til denne bruger
     db.ref(`sessions/${SESSION_ID}/pings/${userId}`).on('value', snap => {
       if (!snap.exists()) return;
-      // Vis notifikation og vibrer
-      showToast('📍 Checkpoint anmoder om din position!');
-      if ('vibrate' in navigator) navigator.vibrate([300, 150, 300]);
-      // Tving øjeblikkelig GPS-opdatering
-      navigator.geolocation.getCurrentPosition(
-        pos => handlePosition(pos),
-        err => console.warn('Ping GPS fejl:', err),
-        { enableHighAccuracy: true, timeout: 10000 }
-      );
-      // Slet ping
+      handlePing();
       snap.ref.remove();
+    });
+
+    // Broadcast ping — til alle vandrere
+    db.ref(`sessions/${SESSION_ID}/pings/ALL`).on('value', snap => {
+      if (!snap.exists()) return;
+      const ping = snap.val();
+      // Ignorer pings ældre end 60 sek (undgår reaktion ved app-genåbning)
+      if (Date.now() - (ping.requestedAt || 0) > 60000) return;
+      handlePing();
+      // Slet IKKE — broadcast skal nå alle
     });
   }
 
