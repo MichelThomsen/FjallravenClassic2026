@@ -431,7 +431,16 @@
   // ═══════════════════════════════════════════════════════════════
   const urlParams  = new URLSearchParams(location.search);
   const SESSION_ID = urlParams.get('session') || 'default';
-  const IS_CHECKPOINT = urlParams.get('role') === 'checkpoint';
+
+  // Gem checkpoint-rolle i localStorage så installeret PWA husker den
+  if (urlParams.get('role') === 'checkpoint') {
+    localStorage.setItem('fjRole', 'checkpoint');
+  } else if (urlParams.has('role')) {
+    localStorage.removeItem('fjRole'); // eksplicit trop-rolle fjerner gemt rolle
+  }
+  const isPwa = window.matchMedia('(display-mode: standalone)').matches || !!navigator.standalone;
+  const IS_CHECKPOINT = urlParams.get('role') === 'checkpoint' ||
+    (isPwa && localStorage.getItem('fjRole') === 'checkpoint');
 
   // ═══════════════════════════════════════════════════════════════
   //  SESSION-ID TIL BRUGER
