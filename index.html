@@ -27,12 +27,24 @@
     /* ─── Status bar (vandrer-view) ─── */
     #statusbar {
       position: fixed; top: 0; left: 0; right: 0;
-      background: rgba(0,0,0,0.80); color: #fff;
-      padding: 8px 12px; font-size: 14px; z-index: 1000;
-      display: none; align-items: center; gap: 8px;
-      backdrop-filter: blur(4px);
+      background: rgba(28,43,24,0.95); color: #fff;
+      padding: 0; font-size: 14px; z-index: 1000;
+      display: none; align-items: stretch;
+      backdrop-filter: blur(8px);
+      border-bottom: 2px solid #D96B5A;
     }
     #statusbar.visible { display: flex; }
+    #sb-inner {
+      display: flex; align-items: center; gap: 10px;
+      padding: 9px 14px; flex: 1;
+    }
+    #sb-badge {
+      background: #D96B5A; color: #fff;
+      padding: 8px 14px; font-size: 11px; font-weight: 800;
+      letter-spacing: 1px; text-transform: uppercase;
+      writing-mode: initial; display: flex; align-items: center;
+      border-right: 1px solid rgba(255,255,255,0.15); flex-shrink: 0;
+    }
 
     /* ─── Kort ─── */
     #map {
@@ -291,8 +303,11 @@
 
   <!-- Statusbar (vandrer) -->
   <div id="statusbar">
-    <span id="sb-dot" style="width:8px;height:8px;background:#4caf50;border-radius:50%;flex-shrink:0;"></span>
-    <span id="sb-text">Starter GPS…</span>
+    <div id="sb-badge">FCDK26</div>
+    <div id="sb-inner">
+      <span id="sb-dot"></span>
+      <span id="sb-text" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">Starter GPS…</span>
+    </div>
   </div>
 
   <!-- Formular (vandrer-view) -->
@@ -743,16 +758,16 @@
     }
 
     // Statusbar
-    const cpTekst = rute && eta_cp_min !== null
-      ? ` — CP om ${etaToTime(eta_cp_min)}`
+    const cpNavn = rute ? rute.cp.navn : null;
+    const cpTekst = cpNavn && eta_cp_min !== null
+      ? ` — ${cpNavn} om ${etaToTime(eta_cp_min)}`
       : '';
-    updateStatusbar(`📍 ${myName} (${myTrop})${cpTekst} — opdateret for 0 sek siden`, true);
+    updateStatusbar(`${myAvatar} ${myName} (${myTrop})${cpTekst}`, true);
 
-    // Opdater "sidst opdateret" i statusbar hvert sekund
     clearInterval(window._statusInterval);
     window._statusInterval = setInterval(() => {
-      const cpStr = rute && eta_cp_min !== null ? ` — CP om ${etaToTime(eta_cp_min)}` : '';
-      updateStatusbar(`📍 ${myName} (${myTrop})${cpStr} — opdateret for ${timeAgo(now)}`, true);
+      const cpStr = cpNavn && eta_cp_min !== null ? ` — ${cpNavn} om ${etaToTime(eta_cp_min)}` : '';
+      updateStatusbar(`${myAvatar} ${myName} (${myTrop})${cpStr} — ${timeAgo(now)}`, true);
     }, 5000);
   }
 
@@ -798,7 +813,7 @@
     requestWakeLock().then(ok => {
       if (!ok) {
         // Wake Lock ikke understøttet — vis advarsel i statusbar
-        updateStatusbar(`📍 ${myName} (${myTrop}) — ⚠️ Skærmen kan slukke (iPhone). Hold appen åben!`, true);
+        updateStatusbar(`${myAvatar} ${myName} (${myTrop}) — ⚠️ Skærmen kan slukke (iPhone). Hold appen åben!`, true);
       }
     });
 
