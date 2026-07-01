@@ -2,7 +2,7 @@
   "name": "Fjällräven Classic Tracking",
   "short_name": "FJ Tracking",
   "description": "Live GPS tracking til Fjällräven Classic Danmark 2026",
-  "start_url": "./",
+  "start_url": "./?session=fjallraven2026",
   "scope": "./",
   "display": "standalone",
   "background_color": "#1C2B18",
