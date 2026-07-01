@@ -484,6 +484,30 @@
   }
 
   // ═══════════════════════════════════════════════════════════════
+  //  WAKE LOCK — holder skærmen tændt så GPS kører videre
+  // ═══════════════════════════════════════════════════════════════
+
+  let wakeLock = null;
+
+  async function requestWakeLock() {
+    if (!('wakeLock' in navigator)) return false;
+    try {
+      wakeLock = await navigator.wakeLock.request('screen');
+      wakeLock.addEventListener('release', () => { wakeLock = null; });
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  // Generhverver wake lock når man kommer tilbage til appen
+  document.addEventListener('visibilitychange', async () => {
+    if (document.visibilityState === 'visible' && myName && !wakeLock) {
+      await requestWakeLock();
+    }
+  });
+
+  // ═══════════════════════════════════════════════════════════════
   //  GPS-TRACKING (vandrer-view)
   // ═══════════════════════════════════════════════════════════════
 
@@ -598,6 +622,13 @@
       // Ryd op ved disconnect
       userRef.onDisconnect().remove();
     }
+
+    requestWakeLock().then(ok => {
+      if (!ok) {
+        // Wake Lock ikke understøttet — vis advarsel i statusbar
+        updateStatusbar(`📍 ${myName} (${myTrop}) — ⚠️ Skærmen kan slukke (iPhone). Hold appen åben!`, true);
+      }
+    });
 
     startGpsTracking();
     startSessionListener();
