@@ -28,7 +28,8 @@
     #statusbar {
       position: fixed; top: 0; left: 0; right: 0;
       background: rgba(28,43,24,0.95); color: #fff;
-      padding: 0; font-size: 14px; z-index: 1000;
+      padding-top: env(safe-area-inset-top);
+      font-size: 14px; z-index: 1000;
       display: none; align-items: stretch;
       backdrop-filter: blur(8px);
       border-bottom: 2px solid #D96B5A;
@@ -232,10 +233,10 @@
       background: #fff; border-radius: 16px 16px 0 0;
       padding: 28px 24px; width: 100%; max-width: 480px; text-align: center;
     }
-    #ios-card h3 { font-size: 18px; margin-bottom: 14px; color: #1a1a2e; }
+    #ios-card h3 { font-size: 18px; margin-bottom: 14px; color: #1C2B18; }
     #ios-card p { font-size: 15px; line-height: 1.7; color: #444; margin-bottom: 4px; }
     #ios-close-btn {
-      margin-top: 20px; padding: 13px 28px; background: #1a1a2e;
+      margin-top: 20px; padding: 13px 28px; background: #D96B5A;
       color: #fff; border: none; border-radius: 10px; font-size: 16px;
       font-weight: 600; cursor: pointer; width: 100%;
     }
@@ -243,7 +244,7 @@
     /* ─── Toast-notifikation ─── */
     .toast {
       position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%);
-      background: #1a1a2e; color: #fff; padding: 13px 22px;
+      background: #1C2B18; color: #F4EDE0; padding: 13px 22px;
       border-radius: 24px; font-size: 15px; z-index: 2500;
       box-shadow: 0 4px 20px rgba(0,0,0,.45); white-space: nowrap;
       animation: toastFade 4s ease forwards; pointer-events: none;
@@ -257,17 +258,17 @@
 
     /* ─── Ping-knap (checkpoint-tabel) ─── */
     .ping-btn {
-      background: none; border: 1.5px solid #e94560; color: #e94560;
+      background: none; border: 1.5px solid #D96B5A; color: #D96B5A;
       border-radius: 6px; padding: 3px 7px; font-size: 12px;
       cursor: pointer; transition: background .15s;
     }
-    .ping-btn:hover  { background: #e9456018; }
+    .ping-btn:hover  { background: #D96B5A18; }
     .ping-btn:disabled { opacity: .35; cursor: default; }
 
     /* ─── Ping-knap i popup ─── */
     .popup-ping-btn {
       display: block; width: 100%; margin-top: 10px;
-      background: #e94560; color: #fff; border: none;
+      background: #D96B5A; color: #fff; border: none;
       border-radius: 8px; padding: 9px; font-size: 13px;
       font-weight: 600; cursor: pointer;
     }
@@ -535,14 +536,14 @@
   Object.entries(ruteLogik).forEach(([startNavn, rute]) => {
     const cpIcon = L.divIcon({
       className: '',
-      html: `<div style="background:#e94560;color:#fff;font-size:11px;font-weight:700;
+      html: `<div style="background:#D96B5A;color:#fff;font-size:11px;font-weight:700;
                border-radius:50%;width:28px;height:28px;display:flex;align-items:center;
                justify-content:center;border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.4)">CP</div>`,
       iconSize: [28, 28], iconAnchor: [14, 14]
     });
     const målIcon = L.divIcon({
       className: '',
-      html: `<div style="background:#ff9800;color:#fff;font-size:10px;font-weight:700;
+      html: `<div style="background:#4BAFC5;color:#fff;font-size:10px;font-weight:700;
                border-radius:4px;padding:2px 5px;border:2px solid #fff;
                box-shadow:0 2px 6px rgba(0,0,0,.4);white-space:nowrap">🏁</div>`,
       iconSize: null, iconAnchor: [10, 10]
@@ -871,10 +872,10 @@
       tr.innerHTML = `
         <td class="name trop-${data.troop || ''}">${data.name || '?'}${staleBadge}</td>
         <td class="trop-${data.troop || ''}">${data.troop || '?'}</td>
-        <td style="font-size:11px;color:#aaa">${data.startPoint || '?'}</td>
+        <td style="font-size:11px;color:#9BC48A">${data.startPoint || '?'}</td>
         <td>${distCpTekst}</td>
         <td>${etaCpTekst}</td>
-        <td style="font-size:11px;color:#888">${ago}</td>
+        <td style="font-size:11px;color:#7BA870">${ago}</td>
         <td><button class="ping-btn" onclick="event.stopPropagation();requestPosition('${uid}','${safeName}',this)">📍</button></td>
       `;
 
@@ -891,7 +892,7 @@
     });
 
     if (rows.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#666;padding:20px">Ingen aktive brugere endnu</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#9BC48A;padding:20px">Ingen aktive brugere endnu</td></tr>';
     }
   }
 
@@ -1063,12 +1064,7 @@
     } else {
       // ── Vandrer-view ─────────────────────────────────
       // Formular er allerede synlig — vent på startTracking()
-      // Listener startes inde i startTracking() efter login
-      // (så vi ikke begynder at trække data før brugeren er identificeret)
-
-      // Vi lytter dog på andre brugere allerede nu, så kortet er "live"
-      // uden at brugeren er logget ind (checkpoint-markører er allerede på kortet)
-      startSessionListener();
+      // startSessionListener() kaldes inde i startTracking() efter login
     }
   })();
 
