@@ -198,6 +198,39 @@
       font-weight: 600; cursor: pointer; width: 100%;
     }
 
+    /* ─── Toast-notifikation ─── */
+    .toast {
+      position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%);
+      background: #1a1a2e; color: #fff; padding: 13px 22px;
+      border-radius: 24px; font-size: 15px; z-index: 2500;
+      box-shadow: 0 4px 20px rgba(0,0,0,.45); white-space: nowrap;
+      animation: toastFade 4s ease forwards; pointer-events: none;
+    }
+    @keyframes toastFade {
+      0%   { opacity:0; transform: translateX(-50%) translateY(12px); }
+      12%  { opacity:1; transform: translateX(-50%) translateY(0); }
+      80%  { opacity:1; }
+      100% { opacity:0; }
+    }
+
+    /* ─── Ping-knap (checkpoint-tabel) ─── */
+    .ping-btn {
+      background: none; border: 1.5px solid #e94560; color: #e94560;
+      border-radius: 6px; padding: 3px 7px; font-size: 12px;
+      cursor: pointer; transition: background .15s;
+    }
+    .ping-btn:hover  { background: #e9456018; }
+    .ping-btn:disabled { opacity: .35; cursor: default; }
+
+    /* ─── Ping-knap i popup ─── */
+    .popup-ping-btn {
+      display: block; width: 100%; margin-top: 10px;
+      background: #e94560; color: #fff; border: none;
+      border-radius: 8px; padding: 9px; font-size: 13px;
+      font-weight: 600; cursor: pointer;
+    }
+    .popup-ping-btn:active { opacity: .8; }
+
     /* Checkpoint-header badge */
     .cp-session-badge {
       display: inline-block; background: #e94560; color: #fff;
@@ -293,6 +326,7 @@
             <th>Km → CP</th>
             <th>ETA CP</th>
             <th>Sidst set</th>
+            <th style="width:52px"></th>
           </tr>
         </thead>
         <tbody id="cp-tbody"></tbody>
@@ -469,7 +503,7 @@
   //  MARKER-HÅNDTERING
   // ═══════════════════════════════════════════════════════════════
 
-  function buildPopupHtml(data) {
+  function buildPopupHtml(data, uid) {
     const offline = isOffline(data.updatedAt || 0);
     const ago = timeAgo(data.updatedAt || 0);
     const farve = TROP_FARVE[data.troop] || '#888';
@@ -495,6 +529,10 @@
     } else {
       html += '<div class="popup-stale">⚠️ Offline (mere end 5 min siden)</div>';
     }
+    if (IS_CHECKPOINT && uid) {
+      const safeName = (data.name || '?').replace(/'/g, "\\'");
+      html += `<button class="popup-ping-btn" onclick="requestPosition('${uid}','${safeName}',this)">📍 Anmod om position</button>`;
+    }
     return html;
   }
 
@@ -519,7 +557,7 @@
     markersData[uid] = data;
     const farve = TROP_FARVE[data.troop] || '#888';
     const offline = isOffline(data.updatedAt || 0);
-    const popupHtml = buildPopupHtml(data);
+    const popupHtml = buildPopupHtml(data, uid);
     const icon = createAvatarIcon(data.avatar || '📍', farve, offline);
 
     if (markers[uid]) {
@@ -670,10 +708,10 @@
     if (myMarker) {
       myMarker.setLatLng([lat, lng]);
       myMarker.setIcon(minIcon);
-      myMarker.getPopup().setContent(buildPopupHtml(payload));
+      myMarker.getPopup().setContent(buildPopupHtml(payload, userId));
     } else {
       myMarker = L.marker([lat, lng], { icon: minIcon })
-        .bindPopup(buildPopupHtml(payload)).addTo(map);
+        .bindPopup(buildPopupHtml(payload, userId)).addTo(map);
       map.setView([lat, lng], 14);
     }
 
@@ -739,6 +777,7 @@
 
     startGpsTracking();
     startSessionListener();
+    listenForPings();
   }
 
   // ═══════════════════════════════════════════════════════════════
@@ -770,6 +809,7 @@
 
       const tr = document.createElement('tr');
       tr.className = `row-${data.troop || ''}${offline ? ' offline-row' : ''}`;
+      const safeName = (data.name || '?').replace(/'/g, "\\'");
       tr.innerHTML = `
         <td class="name trop-${data.troop || ''}">${data.name || '?'}${staleBadge}</td>
         <td class="trop-${data.troop || ''}">${data.troop || '?'}</td>
@@ -777,6 +817,7 @@
         <td>${distCpTekst}</td>
         <td>${etaCpTekst}</td>
         <td style="font-size:11px;color:#888">${ago}</td>
+        <td><button class="ping-btn" onclick="event.stopPropagation();requestPosition('${uid}','${safeName}',this)">📍</button></td>
       `;
 
       // Klik på række → pan til markør
@@ -803,10 +844,54 @@
     Object.entries(markersData).forEach(([uid, data]) => {
       if (markers[uid]) {
         const popup = markers[uid].getPopup();
-        if (popup) popup.setContent(buildPopupHtml(data));
+        if (popup) popup.setContent(buildPopupHtml(data, uid));
       }
     });
   }, 60000);
+
+  // ═══════════════════════════════════════════════════════════════
+  //  PING-SYSTEM — checkpoint → vandrer
+  // ═══════════════════════════════════════════════════════════════
+
+  function showToast(msg) {
+    const t = document.createElement('div');
+    t.className = 'toast';
+    t.textContent = msg;
+    document.body.appendChild(t);
+    setTimeout(() => t.remove(), 4000);
+  }
+
+  function requestPosition(uid, name, btn) {
+    if (!db) return;
+    if (btn) {
+      btn.disabled = true;
+      setTimeout(() => { btn.disabled = false; }, 15000);
+    }
+    db.ref(`sessions/${SESSION_ID}/pings/${uid}`).set({
+      requestedAt: Date.now(),
+      from: 'Checkpoint'
+    }).then(() => {
+      showToast(`📍 Anmodning sendt til ${name}`);
+    });
+  }
+
+  function listenForPings() {
+    if (!db || !userId) return;
+    db.ref(`sessions/${SESSION_ID}/pings/${userId}`).on('value', snap => {
+      if (!snap.exists()) return;
+      // Vis notifikation og vibrer
+      showToast('📍 Checkpoint anmoder om din position!');
+      if ('vibrate' in navigator) navigator.vibrate([300, 150, 300]);
+      // Tving øjeblikkelig GPS-opdatering
+      navigator.geolocation.getCurrentPosition(
+        pos => handlePosition(pos),
+        err => console.warn('Ping GPS fejl:', err),
+        { enableHighAccuracy: true, timeout: 10000 }
+      );
+      // Slet ping
+      snap.ref.remove();
+    });
+  }
 
   // ═══════════════════════════════════════════════════════════════
   //  BOOT
