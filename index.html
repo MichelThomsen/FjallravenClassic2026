@@ -114,6 +114,20 @@
       margin-top: 10px; color: #e53935; font-size: 14px; display: none;
     }
 
+    /* ─── Avatar-vælger ─── */
+    #avatar-picker {
+      display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px;
+    }
+    .avatar-opt {
+      font-size: 26px; width: 46px; height: 46px;
+      display: flex; align-items: center; justify-content: center;
+      border-radius: 10px; border: 2px solid #ddd;
+      cursor: pointer; transition: border-color .15s, transform .1s;
+      user-select: none;
+    }
+    .avatar-opt:hover { border-color: #1a1a2e; transform: scale(1.1); }
+    .avatar-opt.selected { border-color: #1a1a2e; border-width: 3px; background: #f0f4ff; }
+
     /* ─── Firebase-advarsel ─── */
     #firebase-warning {
       position: fixed; top: 0; left: 0; right: 0; bottom: 0;
@@ -190,6 +204,19 @@
       <option value="Holstenshus">Holstenshus</option>
       <option value="Gorilla Park">Gorilla Park</option>
     </select>
+    <label>Vælg ikon</label>
+    <div id="avatar-picker">
+      <span class="avatar-opt selected" data-emoji="🦊">🦊</span>
+      <span class="avatar-opt" data-emoji="🎒">🎒</span>
+      <span class="avatar-opt" data-emoji="🥾">🥾</span>
+      <span class="avatar-opt" data-emoji="🧭">🧭</span>
+      <span class="avatar-opt" data-emoji="⛺">⛺</span>
+      <span class="avatar-opt" data-emoji="🦌">🦌</span>
+      <span class="avatar-opt" data-emoji="🐺">🐺</span>
+      <span class="avatar-opt" data-emoji="🦅">🦅</span>
+      <span class="avatar-opt" data-emoji="🌲">🌲</span>
+      <span class="avatar-opt" data-emoji="🐻">🐻</span>
+    </div>
     <div id="form-error">Udfyld venligst dit navn.</div>
     <button id="start-btn" onclick="startTracking()">Start tracking 📍</button>
   </div>
@@ -277,10 +304,19 @@
   //  TILSTANDSVARIABLER
   // ═══════════════════════════════════════════════════════════════
   let db = null;
-  let userRef = null;          // Firebase-ref til denne brugers node
-  const markers = {};          // { userId: L.CircleMarker }
+  let userRef = null;
+  const markers = {};
   let myMarker = null;
-  let myName = '', myTrop = '', myStart = '';
+  let myName = '', myTrop = '', myStart = '', myAvatar = '🦊';
+
+  // Avatar-vælger
+  document.querySelectorAll('.avatar-opt').forEach(el => {
+    el.addEventListener('click', () => {
+      document.querySelectorAll('.avatar-opt').forEach(e => e.classList.remove('selected'));
+      el.classList.add('selected');
+      myAvatar = el.dataset.emoji;
+    });
+  });
   const posHistory = [];       // ring-buffer til speed: max 3 elementer
 
   // ═══════════════════════════════════════════════════════════════
@@ -408,22 +444,36 @@
     return html;
   }
 
+  function createAvatarIcon(emoji, color, offline) {
+    const opacity = offline ? '0.4' : '1';
+    return L.divIcon({
+      className: '',
+      html: `<div style="
+        background:${color};border:2.5px solid #fff;border-radius:50%;
+        width:36px;height:36px;display:flex;align-items:center;justify-content:center;
+        font-size:20px;box-shadow:0 2px 8px rgba(0,0,0,.45);opacity:${opacity};
+        cursor:pointer;
+      ">${emoji || '📍'}</div>`,
+      iconSize: [36, 36],
+      iconAnchor: [18, 18],
+      popupAnchor: [0, -20]
+    });
+  }
+
   function upsertMarker(uid, data) {
     if (!data.lat || !data.lng) return;
     const farve = TROP_FARVE[data.troop] || '#888';
     const offline = isOffline(data.updatedAt || 0);
-    const opacity = offline ? 0.35 : 0.9;
     const popupHtml = buildPopupHtml(data);
+    const icon = createAvatarIcon(data.avatar || '📍', farve, offline);
 
     if (markers[uid]) {
       markers[uid].setLatLng([data.lat, data.lng]);
-      markers[uid].setStyle({ color: farve, fillColor: farve, fillOpacity: opacity, opacity: offline ? 0.3 : 0.8 });
+      markers[uid].setIcon(icon);
       markers[uid].getPopup().setContent(popupHtml);
     } else {
-      markers[uid] = L.circleMarker([data.lat, data.lng], {
-        radius: 10, color: farve, fillColor: farve,
-        fillOpacity: opacity, opacity: offline ? 0.3 : 0.8, weight: 2
-      }).bindPopup(popupHtml).addTo(map);
+      markers[uid] = L.marker([data.lat, data.lng], { icon })
+        .bindPopup(popupHtml).addTo(map);
     }
   }
 
@@ -544,6 +594,7 @@
       name:         myName,
       troop:        myTrop,
       startPoint:   myStart,
+      avatar:       myAvatar,
       lat:          lat,
       lng:          lng,
       speed_kmh:    Math.round(speedKmh * 10) / 10,
@@ -558,15 +609,15 @@
     }
 
     // Opdater min egen markør lokalt
+    const minFarve = TROP_FARVE[myTrop] || '#888';
+    const minIcon = createAvatarIcon(myAvatar, minFarve, false);
     if (myMarker) {
       myMarker.setLatLng([lat, lng]);
+      myMarker.setIcon(minIcon);
       myMarker.getPopup().setContent(buildPopupHtml(payload));
     } else {
-      const farve = TROP_FARVE[myTrop] || '#888';
-      myMarker = L.circleMarker([lat, lng], {
-        radius: 12, color: farve, fillColor: farve,
-        fillOpacity: 0.95, weight: 3
-      }).bindPopup(buildPopupHtml(payload)).addTo(map);
+      myMarker = L.marker([lat, lng], { icon: minIcon })
+        .bindPopup(buildPopupHtml(payload)).addTo(map);
       map.setView([lat, lng], 14);
     }
 
