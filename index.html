@@ -55,13 +55,28 @@
     }
     #cp-header h2 { font-size: 15px; color: #e94560; margin-bottom: 4px; }
     #cp-header p { font-size: 12px; color: #aaa; }
-    #ping-all-btn {
-      width: 100%; margin-top: 12px; padding: 10px;
-      background: #e94560; color: #fff; border: none;
-      border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer;
-      transition: opacity .2s;
+    /* ─── Swipe-to-confirm slider ─── */
+    #ping-all-slider {
+      position: relative; margin-top: 12px; height: 44px;
+      background: #0f1e3a; border-radius: 22px; overflow: hidden;
+      user-select: none; touch-action: none;
     }
-    #ping-all-btn:disabled { opacity: .4; cursor: default; }
+    #ping-all-slider.done { background: #1b3a1b; }
+    #ping-all-handle {
+      position: absolute; top: 2px; left: 2px;
+      width: 40px; height: 40px; border-radius: 50%;
+      background: #e94560; display: flex; align-items: center;
+      justify-content: center; color: #fff; font-size: 20px;
+      cursor: grab; box-shadow: 0 2px 8px rgba(0,0,0,.4);
+      transition: background .3s;
+    }
+    #ping-all-slider.done #ping-all-handle { background: #4caf50; cursor: default; }
+    #ping-all-label {
+      position: absolute; inset: 0; display: flex;
+      align-items: center; justify-content: center;
+      font-size: 12px; color: #aaa; pointer-events: none;
+      padding-left: 44px;
+    }
     #cp-live-dot {
       display: inline-block; width: 8px; height: 8px;
       background: #4caf50; border-radius: 50%; margin-right: 6px;
@@ -322,7 +337,10 @@
     <div id="cp-header">
       <h2><span id="cp-live-dot"></span>Live oversigt <span class="cp-session-badge" id="cp-session-label">default</span></h2>
       <p>Opdateres automatisk fra Firebase</p>
-      <button id="ping-all-btn" onclick="requestPositionAll(this)">📍 Anmod om lokation — alle tropper</button>
+      <div id="ping-all-slider">
+        <div id="ping-all-handle">›</div>
+        <div id="ping-all-label">Swipe → Anmod alle tropper om position</div>
+      </div>
     </div>
     <div id="cp-table-wrap">
       <table id="cp-table">
@@ -375,7 +393,8 @@
   };
 
   const TROP_FARVE = { Fortrop: '#5b9cf6', Mellemtrop: '#4caf50', Bagtrop: '#ef5350' };
-  const OFFLINE_THRESHOLD_MS = 5 * 60 * 1000; // 5 minutter
+  const OFFLINE_THRESHOLD_MS = 5 * 60 * 1000;  // 5 min → vises som offline
+  const HIDE_THRESHOLD_MS   = 30 * 60 * 1000; // 30 min → fjernes fra tabel
 
   // ═══════════════════════════════════════════════════════════════
   //  URL-PARAMETRE
@@ -801,6 +820,8 @@
 
     tbody.innerHTML = '';
     rows.forEach(([uid, data]) => {
+      // Skjul helt forældede entries (>30 min)
+      if ((Date.now() - (data.updatedAt || 0)) > HIDE_THRESHOLD_MS) return;
       const offline = isOffline(data.updatedAt || 0);
       const ago     = timeAgo(data.updatedAt || 0);
       const rute    = ruteLogik[data.startPoint] || null;
@@ -890,17 +911,71 @@
     }).then(() => showToast(`📍 Anmodning sendt til ${name}`));
   }
 
-  function requestPositionAll(btn) {
+  function requestPositionAll() {
     if (!db) return;
-    if (btn) {
-      btn.disabled = true;
-      setTimeout(() => { btn.disabled = false; }, 20000);
-    }
     const ref = db.ref(`sessions/${SESSION_ID}/pings/ALL`);
     ref.set({ requestedAt: Date.now(), from: 'Checkpoint' }).then(() => {
       showToast('📍 Anmodning sendt til alle tropper');
       setTimeout(() => ref.remove(), 60000);
     });
+  }
+
+  function initPingSlider() {
+    const slider = document.getElementById('ping-all-slider');
+    if (!slider) return;
+    const handle = document.getElementById('ping-all-handle');
+    const label  = document.getElementById('ping-all-label');
+    let dragging = false, startX = 0;
+
+    function maxSlide() { return slider.offsetWidth - handle.offsetWidth - 4; }
+
+    function onStart(e) {
+      if (slider.classList.contains('done')) return;
+      dragging = true;
+      startX = (e.touches ? e.touches[0].clientX : e.clientX) - handle.offsetLeft;
+      e.preventDefault();
+    }
+    function onMove(e) {
+      if (!dragging) return;
+      const x = Math.max(0, Math.min((e.touches ? e.touches[0].clientX : e.clientX) - startX, maxSlide()));
+      handle.style.left = x + 'px';
+      const pct = x / maxSlide();
+      label.style.opacity = Math.max(0, 1 - pct * 2);
+      e.preventDefault();
+    }
+    function onEnd() {
+      if (!dragging) return;
+      dragging = false;
+      const x = parseFloat(handle.style.left || 0);
+      if (x >= maxSlide() * 0.85) {
+        // Aktiveret
+        handle.style.left = maxSlide() + 'px';
+        handle.textContent = '✓';
+        label.textContent = 'Sendt til alle tropper!';
+        label.style.opacity = 1;
+        slider.classList.add('done');
+        requestPositionAll();
+        // Reset efter 4 sek
+        setTimeout(() => {
+          slider.classList.remove('done');
+          handle.style.left = '2px';
+          handle.textContent = '›';
+          label.textContent = 'Swipe → Anmod alle tropper om position';
+          label.style.opacity = 1;
+        }, 4000);
+      } else {
+        // Spring tilbage
+        handle.style.left = '2px';
+        label.style.opacity = 1;
+      }
+    }
+
+    handle.addEventListener('mousedown',  onStart);
+    handle.addEventListener('touchstart', onStart, { passive: false });
+    document.addEventListener('mousemove',  onMove);
+    document.addEventListener('touchmove',  onMove, { passive: false });
+    document.addEventListener('mouseup',  onEnd);
+    document.addEventListener('touchend', onEnd);
   }
 
   function listenForPings() {
@@ -951,6 +1026,7 @@
       document.getElementById('cp-session-label').textContent = SESSION_ID;
 
       startSessionListener();
+      initPingSlider();
 
       // Markører for alle i sessionen vises via listener (upsertMarker)
       // men checkpoint-view sender ikke GPS
