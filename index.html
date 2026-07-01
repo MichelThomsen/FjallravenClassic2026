@@ -4,6 +4,12 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Fjällräven Classic Danmark 2026 — Tracking</title>
+  <link rel="manifest" href="manifest.json" />
+  <link rel="apple-touch-icon" href="icon.svg" />
+  <meta name="theme-color" content="#F47B20" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="FJ Tracking" />
 
   <!-- Leaflet -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -152,12 +158,45 @@
     }
 
     /* ─── Leaflet popup tilpasning ─── */
-    .leaflet-popup-content { font-size: 13px; line-height: 1.6; min-width: 180px; }
-    .popup-name { font-weight: 700; font-size: 15px; margin-bottom: 4px; }
-    .popup-meta { color: #666; font-size: 12px; }
-    .popup-eta { margin-top: 6px; }
-    .popup-eta span { background: #e8f5e9; color: #2e7d32; border-radius: 4px; padding: 2px 6px; font-weight: 600; }
-    .popup-stale { color: #e65100; font-size: 11px; margin-top: 4px; }
+    .leaflet-popup-content-wrapper { border-radius: 12px !important; box-shadow: 0 4px 20px rgba(0,0,0,.25) !important; }
+    .leaflet-popup-content { font-size: 14px; line-height: 1.7; min-width: 220px; }
+    .popup-name { font-weight: 700; font-size: 17px; margin-bottom: 6px; }
+    .popup-meta { color: #555; font-size: 13px; }
+    .popup-eta { margin-top: 8px; }
+    .popup-eta span { background: #e8f5e9; color: #2e7d32; border-radius: 6px; padding: 3px 8px; font-weight: 700; font-size: 14px; }
+    .popup-stale { color: #e65100; font-size: 12px; margin-top: 6px; }
+
+    /* ─── Install-knap (PWA) ─── */
+    #install-btn {
+      position: fixed; bottom: 20px; right: 16px; z-index: 1100;
+      background: #F47B20; color: #fff; border: none; border-radius: 24px;
+      padding: 11px 16px; font-size: 14px; font-weight: 600;
+      box-shadow: 0 4px 16px rgba(0,0,0,.35); cursor: pointer;
+      display: none; align-items: center; gap: 6px;
+      transition: transform .1s;
+    }
+    #install-btn:active { transform: scale(0.95); }
+    #install-btn.visible { display: flex; }
+
+    /* ─── iOS install overlay ─── */
+    #ios-overlay {
+      position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,.65); z-index: 3000; display: none;
+      align-items: flex-end; justify-content: center;
+      padding-bottom: env(safe-area-inset-bottom);
+    }
+    #ios-overlay.visible { display: flex; }
+    #ios-card {
+      background: #fff; border-radius: 16px 16px 0 0;
+      padding: 28px 24px; width: 100%; max-width: 480px; text-align: center;
+    }
+    #ios-card h3 { font-size: 18px; margin-bottom: 14px; color: #1a1a2e; }
+    #ios-card p { font-size: 15px; line-height: 1.7; color: #444; margin-bottom: 4px; }
+    #ios-close-btn {
+      margin-top: 20px; padding: 13px 28px; background: #1a1a2e;
+      color: #fff; border: none; border-radius: 10px; font-size: 16px;
+      font-weight: 600; cursor: pointer; width: 100%;
+    }
 
     /* Checkpoint-header badge */
     .cp-session-badge {
@@ -180,6 +219,20 @@
 
   <!-- Session-advarsel -->
   <div id="session-warning">⚠️ Ingen session i URL — bruger "default". Tilføj ?session=fjallraven2026</div>
+
+  <!-- PWA install-knap -->
+  <button id="install-btn">📲 Download app</button>
+
+  <!-- iOS install instruktioner -->
+  <div id="ios-overlay" onclick="closeIosOverlay(event)">
+    <div id="ios-card">
+      <h3>🦊 Tilføj til hjemmeskærm</h3>
+      <p>1. Tryk på <strong>⬆️ Del</strong>-ikonet nederst i Safari</p>
+      <p>2. Scroll ned og tryk <strong>"Føj til hjemmeskærm"</strong></p>
+      <p>3. Tryk <strong>"Tilføj"</strong> øverst til højre</p>
+      <button id="ios-close-btn" onclick="document.getElementById('ios-overlay').classList.remove('visible')">Luk</button>
+    </div>
+  </div>
 
   <!-- Statusbar (vandrer) -->
   <div id="statusbar">
@@ -306,6 +359,7 @@
   let db = null;
   let userRef = null;
   const markers = {};
+  const markersData = {};
   let myMarker = null;
   let myName = '', myTrop = '', myStart = '', myAvatar = '🦊';
 
@@ -419,7 +473,7 @@
     const offline = isOffline(data.updatedAt || 0);
     const ago = timeAgo(data.updatedAt || 0);
     const farve = TROP_FARVE[data.troop] || '#888';
-    let html = `<div class="popup-name" style="color:${farve}">🦊 ${data.name || '?'}</div>`;
+    let html = `<div class="popup-name" style="color:${farve}">${data.avatar || '🦊'} ${data.name || '?'}</div>`;
     html += `<div class="popup-meta"><b>Trop:</b> ${data.troop || '?'} &nbsp;|&nbsp; <b>Start:</b> ${data.startPoint || '?'}</div>`;
     html += `<div class="popup-meta">Sidst set: ${ago}</div>`;
     if (!offline) {
@@ -462,6 +516,7 @@
 
   function upsertMarker(uid, data) {
     if (!data.lat || !data.lng) return;
+    markersData[uid] = data;
     const farve = TROP_FARVE[data.troop] || '#888';
     const offline = isOffline(data.updatedAt || 0);
     const popupHtml = buildPopupHtml(data);
@@ -481,6 +536,7 @@
     if (markers[uid]) {
       map.removeLayer(markers[uid]);
       delete markers[uid];
+      delete markersData[uid];
     }
   }
 
@@ -744,10 +800,10 @@
   //  OPDATER ALLE POPUP-TEKSTER HVERT MINUT (tidsstempel)
   // ═══════════════════════════════════════════════════════════════
   setInterval(() => {
-    Object.entries(markers).forEach(([uid, marker]) => {
-      const popup = marker.getPopup();
-      if (popup && popup._source && popup._source._fbData) {
-        popup.setContent(buildPopupHtml(popup._source._fbData));
+    Object.entries(markersData).forEach(([uid, data]) => {
+      if (markers[uid]) {
+        const popup = markers[uid].getPopup();
+        if (popup) popup.setContent(buildPopupHtml(data));
       }
     });
   }, 60000);
@@ -794,6 +850,58 @@
       startSessionListener();
     }
   })();
+
+  // ═══════════════════════════════════════════════════════════════
+  //  PWA — SERVICE WORKER + INSTALL-KNAP
+  // ═══════════════════════════════════════════════════════════════
+
+  let _installPrompt = null;
+
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('./sw.js').catch(e => console.warn('SW fejl:', e));
+    });
+  }
+
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    _installPrompt = e;
+    document.getElementById('install-btn').classList.add('visible');
+  });
+
+  window.addEventListener('appinstalled', () => {
+    document.getElementById('install-btn').classList.remove('visible');
+    _installPrompt = null;
+  });
+
+  function isIos() {
+    return /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.MSStream;
+  }
+
+  function isInStandaloneMode() {
+    return window.matchMedia('(display-mode: standalone)').matches || !!navigator.standalone;
+  }
+
+  // iOS viser ikke beforeinstallprompt — vis knap manuelt
+  if (isIos() && !isInStandaloneMode()) {
+    document.getElementById('install-btn').classList.add('visible');
+  }
+
+  document.getElementById('install-btn').addEventListener('click', async () => {
+    if (_installPrompt) {
+      _installPrompt.prompt();
+      const { outcome } = await _installPrompt.userChoice;
+      if (outcome === 'accepted') _installPrompt = null;
+    } else if (isIos()) {
+      document.getElementById('ios-overlay').classList.add('visible');
+    }
+  });
+
+  function closeIosOverlay(e) {
+    if (e.target === document.getElementById('ios-overlay')) {
+      document.getElementById('ios-overlay').classList.remove('visible');
+    }
+  }
   </script>
 </body>
 </html>
